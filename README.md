@@ -9,6 +9,8 @@ dynwave is a dynamic audio player based on fixed samples stream, written in Rust
 
 The purpose of this is to implement a cross platform audio player that plays audio samples stream generated and plays it real-time.
 
+This works as a fusion between [rubato](https://crates.io/crates/rubato) and [cpal](https://crates.io/crates/cpal).
+
 This is useful for emulators for example, where an emulation loop will be like this:
 1) Run emulation for a frame.
 2) Extract the collected audio samples for that frame.
