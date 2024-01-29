@@ -9,6 +9,7 @@ license = "MIT"
 repository = "https://github.com/Amjad50/dynwave"
 keywords = ["audio", "wave", "stream"]
 categories = ["audio", "stream"]
+rust-version = "1.62.0"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
