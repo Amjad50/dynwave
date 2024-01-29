@@ -221,9 +221,8 @@ impl<T: Sample + SizedSample> AudioPlayer<T> {
             }
         };
 
-        let output_stream = output_device
-            .build_output_stream(&config, output_data_fn, Self::err_fn, None)
-            .expect("failed to build an output audio stream");
+        let output_stream =
+            output_device.build_output_stream(&config, output_data_fn, Self::err_fn, None)?;
 
         Ok(Self {
             buffer_producer,

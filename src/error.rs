@@ -1,8 +1,8 @@
 use std::{error::Error, fmt};
 
 use cpal::{
-    BackendSpecificError, DefaultStreamConfigError, PauseStreamError, PlayStreamError,
-    SupportedStreamConfigsError,
+    BackendSpecificError, BuildStreamError, DefaultStreamConfigError, PauseStreamError,
+    PlayStreamError, SupportedStreamConfigsError,
 };
 use rubato::ResamplerConstructionError;
 
@@ -18,6 +18,9 @@ pub enum AudioPlayerError {
     StreamTypeNotSupported,
     /// Forwarded from cpal
     StreamConfigInvalidArgument,
+    /// Forwarded from cpal
+    StreamIdOverflow,
+    StreamConfigNotSupported,
     ResamplerConstructionError(ResamplerConstructionError),
 }
 
@@ -34,6 +37,8 @@ impl fmt::Display for AudioPlayerError {
             }
             Self::StreamTypeNotSupported => write!(f, "Stream type not supported"),
             Self::StreamConfigInvalidArgument => write!(f, "Stream config invalid argument"),
+            Self::StreamIdOverflow => write!(f, "Stream id overflow"),
+            Self::StreamConfigNotSupported => write!(f, "Stream config not supported"),
             Self::ResamplerConstructionError(err) => {
                 write!(f, "Resampler construction error: {}", err)
             }
@@ -61,6 +66,18 @@ impl From<DefaultStreamConfigError> for AudioPlayerError {
             DefaultStreamConfigError::BackendSpecific { err } => {
                 Self::DeviceBackendSpecificError(err)
             }
+        }
+    }
+}
+
+impl From<BuildStreamError> for AudioPlayerError {
+    fn from(e: BuildStreamError) -> Self {
+        match e {
+            BuildStreamError::DeviceNotAvailable => Self::DeviceNotAvailable,
+            BuildStreamError::StreamConfigNotSupported => Self::StreamConfigNotSupported,
+            BuildStreamError::InvalidArgument => Self::StreamConfigInvalidArgument,
+            BuildStreamError::StreamIdOverflow => Self::StreamIdOverflow,
+            BuildStreamError::BackendSpecific { err } => Self::DeviceBackendSpecificError(err),
         }
     }
 }
