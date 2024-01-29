@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download system deps
+        run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+            override: true
+            target: x86_64-unknown-linux-gnu
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy check
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
+      - name: Build
+        run: cargo build
+      - name: Test
+        run: cargo test
+  verify_msrv:
+    name: Verify Minimum Supported Rust Version in Cargo.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download system deps
+        run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev
+      - name: Install or use cached `cargo-msrv`
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: cargo-msrv
+      - name: Verify Minimum Rust Version
+        run: cargo-msrv verify
+
