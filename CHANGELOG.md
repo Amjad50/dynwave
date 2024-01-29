@@ -10,6 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial implementation of the library, supporting dynamic resampling of audio stream.
 
 [Unreleased]: https://github.com/Amjad50/dynwave/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Amjad50/dynwave/compare/d87d8eb...v0.1.0
+[0.1.0]: https://github.com/Amjad50/dynwave/compare/0b4d33e...v0.1.0
 
 [SFML]: https://www.sfml-dev.org/
