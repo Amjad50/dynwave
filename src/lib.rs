@@ -110,6 +110,47 @@ impl<T: Sample + SizedSample> AudioResampler<T> {
     }
 }
 
+/// The `BufferSize` enum represents the amount of audio samples that can be stored in the buffer.
+/// Limiting the number of samples in the buffer is crucial for minimizing audio delay in audio playing.
+///
+/// We will use `emulation` as an example to refer to the process of generating audio samples.
+///
+/// minimizing the buffer size will help minimize audio delay such as audio coming from an emulator.
+/// This is due to the fact that emulation speed does not always perfectly
+/// match the audio playing speed (e.g., 44100Hz).
+///
+/// A smaller buffer size can help maintain better synchronization,
+/// but it may cause noise or other issues on slower machines.
+/// This can occur if the emulation process is slow, or if a CPU-intensive
+/// process starts while the emulator is running.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum BufferSize {
+    #[default]
+    /// 1/4 second worth of samples
+    QuarterSecond,
+    /// 1/2 second worth of samples
+    HalfSecond,
+    /// 1 second worth of samples
+    OneSecond,
+    /// Number of samples to store
+    /// Be careful, here you have to calculate based on the sample rate manually
+    Samples(usize),
+}
+
+impl BufferSize {
+    /// Returns the number of samples in the buffer
+    #[inline]
+    #[must_use]
+    fn store_for_samples(&self, sample_rate: usize, channels: usize) -> usize {
+        match self {
+            Self::QuarterSecond => sample_rate / 4 * channels,
+            Self::HalfSecond => sample_rate / 2 * channels,
+            Self::OneSecond => sample_rate * channels,
+            Self::Samples(alternative_samples) => *alternative_samples,
+        }
+    }
+}
+
 pub struct AudioPlayer<T: Sample> {
     buffer_producer: HeapProducer<T>,
     resampler: Option<AudioResampler<T>>,
@@ -117,7 +158,7 @@ pub struct AudioPlayer<T: Sample> {
 }
 
 impl<T: Sample + SizedSample> AudioPlayer<T> {
-    pub fn new(sample_rate: u32) -> Result<Self, AudioPlayerError> {
+    pub fn new(sample_rate: u32, buffer_size: BufferSize) -> Result<Self, AudioPlayerError> {
         let host = cpal::default_host();
         let output_device = host
             .default_output_device()
@@ -170,13 +211,8 @@ impl<T: Sample + SizedSample> AudioPlayer<T> {
             buffer_size: cpal::BufferSize::Default,
         };
 
-        // Limiting the number of samples in the buffer is better to minimize
-        // audio delay in emulation, this is because emulation speed
-        // does not 100% match audio playing speed (44100Hz).
-        // The buffer holds only audio for 1/4 second, which is good enough for delays,
-        // It can be reduced more, but it might cause noise(?) for slower machines
-        // or if any CPU intensive process started while the emulator is running
-        let buffer = HeapRb::new(output_sample_rate.0 as usize / 2);
+        let ring_buffer_len = buffer_size.store_for_samples(output_sample_rate.0 as usize, 2);
+        let buffer = HeapRb::new(ring_buffer_len);
         let (buffer_producer, mut buffer_consumer) = buffer.split();
 
         let output_data_fn = move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
