@@ -1,3 +1,39 @@
+//! Dynamic audio player based on fixed samples stream
+//!
+//! This crate provides a dynamic audio player that can play audio samples stream coming
+//! from an external generating source, such as an emulator.
+//!
+//! The [`AudioPlayer`] acts as an audio stream player that will play the samples as they come.
+//! And will resample the audio if the generated sample rate is not supported by the audio device,
+//!
+//! # Supported sample types
+//! For now, we rely on [`rubato`] crate for resampling, it has the trait [`Sample`] that is implemented for:
+//! - [`f32`]
+//! - [`f64`]
+//!
+//! # Example
+//!
+//! Here's an example of how to use the `AudioPlayer`:
+//! ```rust,no_run
+//! # use dynwave::{AudioPlayer, BufferSize};
+//! // create a buffer, that can hold 1 second worth of samples
+//! // (base it depend on how fast you generate samples, less buffer is better for latency)
+//! let mut player = AudioPlayer::<f32>::new(44100, BufferSize::OneSecond).unwrap();
+//!
+//! // Start playing the audio
+//! player.play().unwrap();
+//!
+//! // generate audio samples (can be done in a emulation loop for example)
+//! let samples = generate_samples();
+//! player.queue(&samples);
+//!
+//! // pause the audio
+//! player.pause().unwrap();
+//!
+//! # fn generate_samples() -> Vec<f32> {
+//! #     vec![0.0; 1]
+//! # }
+//! ```
 pub mod error;
 
 use cpal::{
@@ -151,6 +187,36 @@ impl BufferSize {
     }
 }
 
+/// The `AudioPlayer` struct represents an audio player that can play audio samples stream
+/// coming from an external generating source, such as an emulator.
+///
+/// The `AudioPlayer` may resample the audio if the generated sample rate is not supported by the audio device,
+/// which may cause a slight performance hit due to the resampling process. If the machine supports the input sample rate,
+/// no resampling will be done, and the audio samples will be used as is.
+///
+/// # Example
+///
+/// Here's an example of how to use the `AudioPlayer`:
+/// ```rust,no_run
+/// # use dynwave::{AudioPlayer, BufferSize};
+/// // create a buffer, that can hold 1 second worth of samples
+/// // (base it depend on how fast you generate samples, less buffer is better for latency)
+/// let mut player = AudioPlayer::<f32>::new(44100, BufferSize::OneSecond).unwrap();
+///
+/// // Start playing the audio
+/// player.play().unwrap();
+///
+/// // generate audio samples (can be done in a emulation loop for example)
+/// let samples = generate_samples();
+/// player.queue(&samples);
+///
+/// // pause the audio
+/// player.pause().unwrap();
+///
+/// # fn generate_samples() -> Vec<f32> {
+/// #     vec![0.0; 1]
+/// # }
+/// ```
 pub struct AudioPlayer<T: Sample> {
     buffer_producer: HeapProducer<T>,
     resampler: Option<AudioResampler<T>>,
@@ -158,6 +224,31 @@ pub struct AudioPlayer<T: Sample> {
 }
 
 impl<T: Sample + SizedSample> AudioPlayer<T> {
+    /// Creates a new instance of `AudioPlayer`.
+    ///
+    /// # Parameters
+    /// * `sample_rate`: The sample rate of the audio player in Hz. Common values are `44100` or `48000`.
+    /// * `buffer_size`: The size of the buffer that will store the audio samples. See [`BufferSize`] for options.
+    ///
+    /// # Returns
+    /// Might return an `Error` if:
+    /// - No output device is found
+    /// - The output device does not support dual channel
+    /// - Some error happened with the device backend
+    /// - Could not create the audio stream
+    ///
+    /// Check [`AudioPlayerError`] for more information about the possible errors.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use dynwave::{AudioPlayer, BufferSize};
+    /// let sample_rate = 44100;
+    /// let buffer_size = BufferSize::HalfSecond;
+    /// let player = AudioPlayer::<f32>::new(sample_rate, buffer_size).unwrap();
+    /// ```
+    ///
+    /// This example creates a new `AudioPlayer` with a sample rate of 44100 Hz and a buffer size of half a second.
     pub fn new(sample_rate: u32, buffer_size: BufferSize) -> Result<Self, AudioPlayerError> {
         let host = cpal::default_host();
         let output_device = host
@@ -232,23 +323,58 @@ impl<T: Sample + SizedSample> AudioPlayer<T> {
     }
 
     /// Start the player
+    ///
+    /// If the player is playing and if the buffer is emptied (played until finished without adding more data), popping sound might be heard.
+    ///
+    /// Might return an `Error` if:
+    /// - The device associated with the stream is no longer available
+    /// - Some error happened with the device backend
+    ///
+    /// Check [`PlayError`] for more information about the possible errors.
     pub fn play(&self) -> Result<(), PlayError> {
         self.output_stream.play().map_err(|e| e.into())
     }
 
     /// Pause the player
+    ///
+    /// Might return an `Error` if:
+    /// - The device associated with the stream is no longer available
+    /// - Some error happened with the device backend
+    ///
+    /// Check [`PlayError`] for more information about the possible errors.
     pub fn pause(&self) -> Result<(), PlayError> {
         self.output_stream.pause().map_err(|e| e.into())
     }
 
+    /// Queues audio samples to be played.
+    ///
+    /// The `queue` function takes a slice of audio samples and adds them to the buffer. If a `resampler` is present,
+    /// it resamples the audio data before adding it to the buffer.
+    ///
+    /// If the buffer is full, the function will drop the audio samples that don't fit in the buffer and won't block.
+    ///
+    /// If the player is playing, the audio samples will be played immediately, and if the buffer is emptied, popping sound might be heard.
+    ///
+    /// # Parameters
+    /// * `data`: A slice of audio samples to be played.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use dynwave::{AudioPlayer, BufferSize};
+    /// let sample_rate = 44100;
+    /// let buffer_size = BufferSize::HalfSecond;
+    /// let mut player = AudioPlayer::new(sample_rate, buffer_size).unwrap();
+    /// let samples = vec![0.5, 0.7, 0.9, 1.0, 0.9, 0.7, 0.5, 0.3, 0.1];
+    /// player.queue(&samples);
+    /// ```
+    /// This example creates a new `AudioPlayer` with a sample rate of 44100 Hz and a buffer size of half a second, queues some audio samples, and then starts playing the audio.
     pub fn queue(&mut self, data: &[T]) {
-        let Some(resampler) = &mut self.resampler else {
+        if let Some(resampler) = &mut self.resampler {
+            resampler.resample_into_producer(data, &mut self.buffer_producer);
+        } else {
             // no resampling
             self.buffer_producer.push_slice(data);
-            return;
-        };
-
-        resampler.resample_into_producer(data, &mut self.buffer_producer);
+        }
     }
 
     fn err_fn(err: cpal::StreamError) {
