@@ -1,2 +1,2 @@
-# dyn_wave
+# dynwave
 Dynamic audio player based on fixed samples stream
