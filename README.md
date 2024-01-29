@@ -21,7 +21,7 @@ This is useful for emulators for example, where an emulation loop will be like t
 
 | Project | Description |
 | ------- | ----------- |
-| [mizu](https://github.com/Amjad50/mizu) | A GameBoy emulator written in Rust |
+| [mizu](https://github.com/Amjad50/mizu) | A GameBoy emulator written in Rust (this is actually were this library originiated https://github.com/Amjad50/mizu/issues/11)|
 | [trapezoid](https://github.com/Amjad50/trapezoid) | PSX emulator powered with Vulkan and Rust |
 
 
