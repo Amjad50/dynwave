@@ -1,21 +1,24 @@
 pub mod error;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    SizedSample,
+};
 use error::{AudioPlayerError, PlayError};
 use ringbuf::{HeapProducer, HeapRb};
-use rubato::{FftFixedInOut, Resampler};
+use rubato::{FftFixedInOut, Resampler, Sample};
 
-pub struct AudioPlayer {
-    buffer_producer: HeapProducer<f32>,
-    resampler: Option<FftFixedInOut<f32>>,
-    pre_resampled_buffer: Vec<f32>,
-    pre_resampled_split_buffers: [Vec<f32>; 2],
-    resample_process_buffers: [Vec<f32>; 2],
-    resampled_buffer: Vec<f32>,
+pub struct AudioPlayer<T: Sample> {
+    buffer_producer: HeapProducer<T>,
+    resampler: Option<FftFixedInOut<T>>,
+    pre_resampled_buffer: Vec<T>,
+    pre_resampled_split_buffers: [Vec<T>; 2],
+    resample_process_buffers: [Vec<T>; 2],
+    resampled_buffer: Vec<T>,
     output_stream: cpal::Stream,
 }
 
-impl AudioPlayer {
+impl<T: Sample + SizedSample> AudioPlayer<T> {
     pub fn new(sample_rate: u32) -> Result<Self, AudioPlayerError> {
         let host = cpal::default_host();
         let output_device = host
@@ -31,10 +34,10 @@ impl AudioPlayer {
         let mut found_conf = false;
 
         for c in &conf {
-            // must have 2 channels and f32 format
+            // must have 2 channels and <T> format
             // (almost all? devices will have at least one configuration with these)
             if c.channels() == 2
-                && c.sample_format() == cpal::SampleFormat::F32
+                && c.sample_format() == T::FORMAT
                 && c.min_sample_rate() <= sample_rate
                 && c.max_sample_rate() >= sample_rate
             {
@@ -48,7 +51,7 @@ impl AudioPlayer {
         } else {
             let def_conf = output_device.default_output_config()?;
 
-            if def_conf.channels() != 2 || def_conf.sample_format() != cpal::SampleFormat::F32 {
+            if def_conf.channels() != 2 || def_conf.sample_format() != T::FORMAT {
                 eprintln!("No supported configuration found for audio device, please open an issue in github `Amjad50/dynwave`\n\
                       list of supported configurations: {:#?}", conf);
                 return Err(AudioPlayerError::DualChannelNotSupported);
@@ -56,7 +59,7 @@ impl AudioPlayer {
 
             (
                 def_conf.sample_rate(),
-                Some(FftFixedInOut::<f32>::new(
+                Some(FftFixedInOut::<T>::new(
                     sample_rate.0 as usize,
                     def_conf.sample_rate().0 as usize,
                     // the number of samples for one video frame in 60 FPS
@@ -81,9 +84,9 @@ impl AudioPlayer {
         let buffer = HeapRb::new(output_sample_rate.0 as usize / 2);
         let (buffer_producer, mut buffer_consumer) = buffer.split();
 
-        let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+        let output_data_fn = move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
             for sample in data {
-                *sample = buffer_consumer.pop().unwrap_or(0.);
+                *sample = buffer_consumer.pop().unwrap_or(T::EQUILIBRIUM);
             }
         };
 
@@ -112,7 +115,7 @@ impl AudioPlayer {
         self.output_stream.pause().map_err(|e| e.into())
     }
 
-    pub fn queue(&mut self, data: &[f32]) {
+    pub fn queue(&mut self, data: &[T]) {
         let Some(resampler) = &mut self.resampler else {
             // no resampling
             self.buffer_producer.push_slice(data);
@@ -120,12 +123,12 @@ impl AudioPlayer {
         };
 
         // helper method to split channels into separate vectors
-        fn read_frames(inbuffer: &[f32], n_frames: usize, outputs: &mut [Vec<f32>]) {
+        fn read_frames<T: Copy>(inbuffer: &[T], n_frames: usize, outputs: &mut [Vec<T>]) {
             for output in outputs.iter_mut() {
                 output.clear();
                 output.reserve(n_frames);
             }
-            let mut value: f32;
+            let mut value: T;
             let mut inbuffer_iter = inbuffer.iter();
             for _ in 0..n_frames {
                 for output in outputs.iter_mut() {
@@ -137,7 +140,7 @@ impl AudioPlayer {
 
         /// Helper to merge channels into a single vector
         /// the number of channels is the size of `waves` slice
-        fn write_frames(waves: &[Vec<f32>], outbuffer: &mut Vec<f32>) {
+        fn write_frames<T: Copy>(waves: &[Vec<T>], outbuffer: &mut Vec<T>) {
             let nbr = waves[0].len();
             for frame in 0..nbr {
                 for wave in waves.iter() {
@@ -167,8 +170,8 @@ impl AudioPlayer {
             self.resample_process_buffers[0].clear();
 
             let output_frames = resampler.output_frames_next();
-            self.resample_process_buffers[0].resize(output_frames, 0.);
-            self.resample_process_buffers[1].resize(output_frames, 0.);
+            self.resample_process_buffers[0].resize(output_frames, T::EQUILIBRIUM);
+            self.resample_process_buffers[1].resize(output_frames, T::EQUILIBRIUM);
 
             resampler
                 .process_into_buffer(
@@ -191,9 +194,7 @@ impl AudioPlayer {
             self.pre_resampled_buffer = self.pre_resampled_buffer.split_off(frames * 2);
         }
     }
-}
 
-impl AudioPlayer {
     fn err_fn(err: cpal::StreamError) {
         eprintln!("an error occurred on audio stream: {}", err);
     }
