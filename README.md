@@ -24,7 +24,6 @@ This is useful for emulators for example, where an emulation loop will be like t
 | [mizu](https://github.com/Amjad50/mizu) | A GameBoy emulator written in Rust (this is actually were this library originiated https://github.com/Amjad50/mizu/issues/11)|
 | [trapezoid](https://github.com/Amjad50/trapezoid) | PSX emulator powered with Vulkan and Rust |
 
-
 ## Getting Started
 
 You can use `dynwave` to play audio streams for your Rust projects.
@@ -51,6 +50,18 @@ player.queue(&samples);
 // pause the audio
 player.pause().unwrap();
 ```
+
+## Minimum Supported Rust Version (MSRV)
+The minimum supported Rust version for this crate is `1.62.0`.
+
+## Contributing
+
+Contributions are welcome, please open an issue or a PR if you have any suggestions or ideas.
+
+Make sure to:
+- Run `cargo fmt`.
+- Run `cargo clippy`.
+- Run `cargo test`.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details
