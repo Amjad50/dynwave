@@ -18,14 +18,6 @@ This is useful for emulators for example, where an emulation loop will be like t
 4) Take video frame and display it.
 5) Repeat.
 
-## Users of dynwave
-> If you are using `dynwave` in your project, please open a PR to add it here.
-
-| Project | Description |
-| ------- | ----------- |
-| [mizu](https://github.com/Amjad50/mizu) | A GameBoy emulator written in Rust (this is actually were this library originiated https://github.com/Amjad50/mizu/issues/11)|
-| [trapezoid](https://github.com/Amjad50/trapezoid) | PSX emulator powered with Vulkan and Rust |
-
 ## Getting Started
 
 You can use `dynwave` to play audio streams for your Rust projects.
@@ -64,6 +56,14 @@ Make sure to:
 - Run `cargo fmt`.
 - Run `cargo clippy`.
 - Run `cargo test`.
+
+## Projects using `dynwave`
+> If you are using `dynwave` in your project, please open a PR to add it here.
+
+| Project | Description |
+| ------- | ----------- |
+| [mizu](https://github.com/Amjad50/mizu) | A GameBoy emulator written in Rust (this is actually were this library originiated https://github.com/Amjad50/mizu/issues/11)|
+| [trapezoid](https://github.com/Amjad50/trapezoid) | PSX emulator powered with Vulkan and Rust |
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details
