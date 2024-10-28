@@ -42,7 +42,10 @@ use cpal::{
     FromSample, SizedSample,
 };
 use error::{AudioPlayerError, PlayError};
-use ringbuf::{HeapProducer, HeapRb};
+use ringbuf::{
+    traits::{Producer, Split},
+    HeapProd, HeapRb,
+};
 use rubato::{FftFixedInOut, Resampler, Sample};
 
 struct AudioResampler<T: Sample> {
@@ -72,7 +75,7 @@ impl<T: Sample + SizedSample> AudioResampler<T> {
         })
     }
 
-    fn resample_into_producer(&mut self, data: &[T], producer: &mut HeapProducer<T>) {
+    fn resample_into_producer(&mut self, data: &[T], producer: &mut HeapProd<T>) {
         // helper method to split channels into separate vectors
         fn read_frames<T: Copy>(inbuffer: &[T], n_frames: usize, outputs: &mut [Vec<T>]) {
             for output in outputs.iter_mut() {
@@ -219,7 +222,7 @@ impl BufferSize {
 /// # }
 /// ```
 pub struct AudioPlayer<T: Sample> {
-    buffer_producer: HeapProducer<T>,
+    buffer_producer: HeapProd<T>,
     resampler: Option<AudioResampler<T>>,
     output_stream: cpal::Stream,
 }
