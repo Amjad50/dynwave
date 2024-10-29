@@ -46,7 +46,7 @@ player.pause().unwrap();
 ```
 
 ## Minimum Supported Rust Version (MSRV)
-The minimum supported Rust version for this crate is `1.62.0`.
+The minimum supported Rust version for this crate is `1.70.0`.
 
 ## Contributing
 
@@ -64,6 +64,7 @@ Make sure to:
 | ------- | ----------- |
 | [mizu](https://github.com/Amjad50/mizu) | A GameBoy emulator written in Rust (this is actually were this library originiated https://github.com/Amjad50/mizu/issues/11)|
 | [trapezoid](https://github.com/Amjad50/trapezoid) | PSX emulator powered with Vulkan and Rust |
+| [plastic](https://github.com/Amjad50/plastic) | NES emulator with TUI and GUI |
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details
