@@ -35,13 +35,17 @@
 //! # }
 //! ```
 pub mod error;
+mod utils;
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SizedSample,
+    FromSample, SizedSample,
 };
 use error::{AudioPlayerError, PlayError};
-use ringbuf::{HeapProducer, HeapRb};
+use ringbuf::{
+    traits::{Producer, Split},
+    HeapProd, HeapRb,
+};
 use rubato::{FftFixedInOut, Resampler, Sample};
 
 struct AudioResampler<T: Sample> {
@@ -71,7 +75,7 @@ impl<T: Sample + SizedSample> AudioResampler<T> {
         })
     }
 
-    fn resample_into_producer(&mut self, data: &[T], producer: &mut HeapProducer<T>) {
+    fn resample_into_producer(&mut self, data: &[T], producer: &mut HeapProd<T>) {
         // helper method to split channels into separate vectors
         fn read_frames<T: Copy>(inbuffer: &[T], n_frames: usize, outputs: &mut [Vec<T>]) {
             for output in outputs.iter_mut() {
@@ -218,12 +222,27 @@ impl BufferSize {
 /// # }
 /// ```
 pub struct AudioPlayer<T: Sample> {
-    buffer_producer: HeapProducer<T>,
+    buffer_producer: HeapProd<T>,
     resampler: Option<AudioResampler<T>>,
     output_stream: cpal::Stream,
 }
 
-impl<T: Sample + SizedSample> AudioPlayer<T> {
+impl<T: Sample + SizedSample> AudioPlayer<T>
+where
+    // sadly, cpal uses macro to generate those, and there is no auto way
+    // to use the type system to, even though it seems that it makes sense
+    // to have `T : FromSample<W> where W: SizedSample`?
+    i8: FromSample<T>,
+    i16: FromSample<T>,
+    i32: FromSample<T>,
+    i64: FromSample<T>,
+    u8: FromSample<T>,
+    u16: FromSample<T>,
+    u32: FromSample<T>,
+    u64: FromSample<T>,
+    f32: FromSample<T>,
+    f64: FromSample<T>,
+{
     /// Creates a new instance of `AudioPlayer`.
     ///
     /// # Parameters
@@ -276,22 +295,49 @@ impl<T: Sample + SizedSample> AudioPlayer<T> {
             }
         }
 
-        let (output_sample_rate, resampler) = if found_conf {
-            (sample_rate, None)
+        let (output_sample_rate, output_format, resampler) = if found_conf {
+            (sample_rate, T::FORMAT, None)
         } else {
-            let def_conf = output_device.default_output_config()?;
+            // second time, try to find something that is 2 channels, but format and sample range can
+            // be different, match with highest value
+            let mut max_match = 0;
+            let mut matched_conf = None;
+            for c in &conf {
+                let mut curr_match = 0;
+                if c.channels() == 2 {
+                    curr_match += 1;
+                    if c.sample_format() == T::FORMAT {
+                        curr_match += 3;
+                    }
+                    if c.min_sample_rate() <= sample_rate && c.max_sample_rate() >= sample_rate {
+                        curr_match += 2;
+                    }
+                }
+                if curr_match > max_match {
+                    max_match = curr_match;
+                    matched_conf = Some(c);
+                }
+            }
 
-            if def_conf.channels() != 2 || def_conf.sample_format() != T::FORMAT {
+            let used_conf = match matched_conf {
+                Some(conf) => conf
+                    .try_with_sample_rate(sample_rate)
+                    .unwrap_or_else(|| conf.with_max_sample_rate()),
+                None => output_device.default_output_config()?,
+            };
+
+            if used_conf.channels() != 2 {
                 eprintln!("No supported configuration found for audio device, please open an issue in github `Amjad50/dynwave`\n\
                       list of supported configurations: {:#?}", conf);
                 return Err(AudioPlayerError::DualChannelNotSupported);
             }
 
             (
-                def_conf.sample_rate(),
+                used_conf.sample_rate(),
+                used_conf.sample_format(),
                 Some(AudioResampler::new(
                     sample_rate.0 as usize,
-                    def_conf.sample_rate().0 as usize,
+                    used_conf.sample_rate().0 as usize,
                 )?),
             )
         };
@@ -304,16 +350,17 @@ impl<T: Sample + SizedSample> AudioPlayer<T> {
 
         let ring_buffer_len = buffer_size.store_for_samples(output_sample_rate.0 as usize, 2);
         let buffer = HeapRb::new(ring_buffer_len);
-        let (buffer_producer, mut buffer_consumer) = buffer.split();
+        let (buffer_producer, buffer_consumer) = buffer.split();
 
-        let output_data_fn = move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-            for sample in data {
-                *sample = buffer_consumer.pop().unwrap_or(T::EQUILIBRIUM);
-            }
-        };
+        let output_data_fn = utils::create_output_processor(output_format, buffer_consumer);
 
-        let output_stream =
-            output_device.build_output_stream(&config, output_data_fn, Self::err_fn, None)?;
+        let output_stream = output_device.build_output_stream_raw(
+            &config,
+            output_format,
+            output_data_fn,
+            Self::err_fn,
+            None,
+        )?;
 
         Ok(Self {
             buffer_producer,

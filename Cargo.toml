@@ -1,6 +1,6 @@
 [package]
 name = "dynwave"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 description = "Dynamic audio player based on fixed samples stream"
@@ -9,12 +9,13 @@ license = "MIT"
 repository = "https://github.com/Amjad50/dynwave"
 keywords = ["audio", "wave", "stream"]
 categories = ["audio", "stream"]
-rust-version = "1.62.0"
+rust-version = "1.70.0"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cpal = "0.15"
-ringbuf = { version = "0.3", default-features = false, features = ["alloc"] }
-rubato = "0.14"
+cpal = ">=0.15.3"
+ringbuf = { version = "0.4", default-features = false, features = ["alloc"] }
+rubato = "0.16"
+
